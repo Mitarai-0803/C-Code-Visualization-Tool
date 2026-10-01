@@ -1,0 +1,179 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>C++ コード可視化（DXライブラリ / DX11）</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#fbfaf7;--fg:#1d2330;--mut:#667085;--card:#eef1f6;--bd:#cbd2df;--dx:#1d5fd1;--d11:#c2410c;--ac:#0f766e}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#12161f;--fg:#e6eaf2;--mut:#98a2b3;--card:#1c2230;--bd:#384056;--dx:#6ea8ff;--d11:#fb923c;--ac:#2dd4bf}}
+:root[data-theme=dark]{--bg:#12161f;--fg:#e6eaf2;--mut:#98a2b3;--card:#1c2230;--bd:#384056;--dx:#6ea8ff;--d11:#fb923c;--ac:#2dd4bf}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.7 system-ui,"Hiragino Sans","Yu Gothic UI","Noto Sans JP",sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:21px;margin:0 0 2px}.m{color:var(--mut);font-size:12px}
+#drop{border:2px dashed var(--bd);border-radius:10px;padding:14px;text-align:center;margin-top:10px}#drop.on{border-color:var(--ac)}
+button,select{font:inherit;padding:5px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer;max-width:100%}
+button.on{background:var(--ac);color:var(--bg);border-color:var(--ac)}
+textarea{width:100%;height:110px;font:12px monospace;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center}
+.ev{padding:3px 8px;border-left:3px solid var(--bd);margin:2px 0;font-size:13px;cursor:pointer;word-break:break-all}
+.ev.dx{border-color:var(--dx)}.ev.d11{border-color:var(--d11)}.ev.call{border-color:var(--ac)}
+.ev.act{background:var(--card);outline:2px solid var(--ac)}
+.bd{font-size:11px;padding:1px 7px;border-radius:9px;background:var(--dx);color:var(--bg)}.d11 .bd{background:var(--d11)}
+.card{background:var(--card);border-radius:8px;padding:10px 12px;margin:10px 0}
+pre{margin:6px 0 0;overflow-x:auto;font:12px/1.5 monospace}pre span{display:block}pre .hl{background:rgba(45,180,160,.28)}
+.sv{overflow-x:auto;border:1px solid var(--bd);border-radius:8px}
+.bx{fill:var(--card);stroke:var(--fg)}.ed{stroke:var(--fg);fill:none}.dash{stroke-dasharray:5 4}
+.cn{font-weight:700;fill:var(--fg);font-size:13px}.rw{font:11px monospace;fill:var(--fg)}.d11t{fill:var(--d11)}.lb{font-size:10px;fill:var(--mut);text-anchor:middle}
+.chip{display:inline-block;margin:2px 4px 2px 0}
+.gv{height:520px;resize:vertical;overflow:auto;border:1px solid var(--bd);border-radius:8px}
+.wr{fill:none;stroke:var(--bd);stroke-width:2}.wr.ps{stroke:var(--ac)}
+.wr.on{stroke:var(--ac);stroke-width:3;stroke-dasharray:8 6;animation:fl .5s linear infinite}
+@keyframes fl{to{stroke-dashoffset:-14}}
+@media(prefers-reduced-motion:reduce){.wr.on{animation:none}}
+.nd{opacity:.45;cursor:pointer}.nd.p,.nd.a{opacity:1}
+.nb{fill:var(--card);stroke:var(--bd);stroke-width:1.5}.nd.a .nb{stroke:var(--ac);stroke-width:3;filter:drop-shadow(0 0 6px var(--ac))}
+.nt{font-size:12px;font-weight:700;fill:var(--bg)}
+.h-call{fill:var(--ac)}.pk{font:700 12px monospace;fill:var(--fg);paint-order:stroke;stroke:var(--bg);stroke-width:4px;text-anchor:end}.h-dx{fill:var(--dx)}.h-d11{fill:var(--d11)}.h-start{fill:var(--fg)}
+</style></head><body><main>
+<h1>C++ コード可視化</h1>
+<div class="m">DXライブラリ / DirectX 11 向け。ソースを読み込むと、クラス構造・呼び出しの流れ・引数の受け渡しを表示します。</div>
+<div id="drop">.cpp / .h をここにドロップ、または <input type="file" id="f" multiple accept=".cpp,.h,.hpp,.c,.cc,.cxx,.txt"><div class="m">UTF-8 と Shift-JIS に対応。読み込んだファイル: <span id="fl"></span></div></div>
+<details><summary class="m">コードを貼り付けて解析</summary><textarea id="t"></textarea><div class="bar"><button id="go">解析する</button></div></details>
+<div class="bar"><button id="sm">サンプルを読み込む</button><button id="cl">クリア</button><label class="m">開始関数 <select id="en"></select></label></div>
+<div class="bar" id="tabs"><button data-t="n">ノードグラフ</button><button data-t="c">クラス図</button><button data-t="f">呼び出しの流れ</button><button data-t="s">ステップ実行</button></div>
+<div id="out"></div></main>
+<script>
+const $=id=>document.getElementById(id),E='<p class="m">ファイルを読み込むと表示されます。</p>';
+const SAMPLE=`#include "DxLib.h"
+class Sprite{public:int handle;int x,y;
+ void Load(const char* p){handle=LoadGraph(p);}
+ void Draw(){DrawGraph(x,y,handle,TRUE);}};
+class Player:public Sprite{public:int speed=4;
+ void Update(){if(CheckHitKey(KEY_INPUT_RIGHT))x+=speed;}};
+class Game{Player player;public:
+ void Init(){player.Load("player.png");}
+ void Run(){player.Update();ClearDrawScreen();player.Draw();ScreenFlip();}};
+int WINAPI WinMain(HINSTANCE,HINSTANCE,LPSTR,int){
+ ChangeWindowMode(TRUE);if(DxLib_Init()==-1)return -1;
+ Game g;g.Init();
+ while(ProcessMessage()==0){g.Run();}
+ DxLib_End();return 0;}`;
+const D={DxLib_Init:'DXライブラリ初期化',DxLib_End:'DXライブラリ終了',ProcessMessage:'OSメッセージ処理（毎フレーム必要）',ClearDrawScreen:'裏画面を消去',ScreenFlip:'裏画面を表画面へ反映',SetDrawScreen:'描画先を設定',ChangeWindowMode:'ウィンドウ/全画面の切替',LoadGraph:'画像を読み込みハンドル(int)を返す',DrawGraph:'画像を描画 (x,y,ハンドル,透過)',CheckHitKey:'キー入力の判定',WaitKey:'キー入力待ち',D3D11CreateDeviceAndSwapChain:'デバイス・コンテキスト・スワップチェーンを生成',CreateBuffer:'GPUバッファを生成',CreateVertexShader:'頂点シェーダを生成',CreatePixelShader:'ピクセルシェーダを生成',CreateInputLayout:'入力レイアウトを生成',IASetVertexBuffers:'頂点バッファを入力アセンブラへ',IASetIndexBuffer:'インデックスバッファを設定',IASetInputLayout:'入力レイアウトを設定',VSSetShader:'頂点シェーダを設定',PSSetShader:'ピクセルシェーダを設定',VSSetConstantBuffers:'定数バッファをVSへ',OMSetRenderTargets:'描画先(RTV/DSV)を設定',ClearRenderTargetView:'描画先を色でクリア',ClearDepthStencilView:'深度バッファをクリア',UpdateSubresource:'CPUからGPUへ内容を転送',Map:'バッファをCPUから書込み可能にする',Unmap:'Mapの解除',DrawIndexed:'インデックス付きで描画',Present:'画面へ表示'};
+const DXRE=/^(DxLib_\w+|ProcessMessage|ClearDrawScreen|ScreenFlip|(Draw|Load|Delete|Set|Get|Check|Play|Stop|Change|Init|Make|Wait)[A-Z]\w*)$/;
+const D11RE=/^(D3D11\w+|CreateDXGIFactory\w*|(IA|VS|PS|GS|CS|OM|RS)Set\w+|DrawIndexed\w*|DrawInstanced\w*|Map|Unmap|Present|Clear(RenderTarget|DepthStencil)View|Create(Buffer|Texture2D|\w+View|\w+Shader|\w+State|InputLayout|SwapChain)|UpdateSubresource|Dispatch|Flush|D3DCompile\w*)$/;
+const KW=/^(if|for|while|switch|catch|return|else|sizeof|decltype|defined|\w+_cast|static_assert|new|delete)$/;
+let files=[],fns=[],cls=[],trace=[],step=0,tab='n',hasDx=0,hasD=0;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const kind=n=>hasD&&D11RE.test(n)?'d11':hasDx&&DXRE.test(n)?'dx':'';
+const isD=t=>/\b(ID3D11\w+|IDXGI\w+|D3D11_\w+|XMFLOAT\w*|XMMATRIX|XMVECTOR|ComPtr)\b/.test(t);
+const blank=m=>m.replace(/[^\n]/g,' ');
+const strip=s=>s.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g,blank).replace(/"(?:\\.|[^"\\\n])*"/g,m=>'"'+' '.repeat(m.length-2)+'"');
+function close(s,i,a,b){let d=0;for(;i<s.length;i++){if(s[i]==a)d++;else if(s[i]==b&&--d==0)return i}return s.length-1}
+function split(s){const r=[];let d=0,b='';for(const c of s){if('([{'.includes(c))d++;else if(')]}'.includes(c))d--;if(c==','&&d<=0){r.push(b);b=''}else b+=c}if(b.trim())r.push(b);return r}
+function analyze(){
+ fns=[];cls=[];const all=files.map(f=>f.t).join('\n');hasDx=/DxLib/.test(all);hasD=/d3d11/i.test(all);
+ files.forEach(f=>{f.s=strip(f.t);f.ls=[0];for(let i=0;i<f.t.length;i++)if(f.t[i]=='\n')f.ls.push(i+1)});
+ const ln=(f,p)=>{let lo=0,hi=f.ls.length-1;while(lo<hi){const m=(lo+hi+1)>>1;f.ls[m]<=p?lo=m:hi=m-1}return lo+1};
+ files.forEach(f=>{const re=/\b(class|struct)\s+(\w+)\s*(?:final\s*)?(?::\s*([^{;]+))?\{/g;let m;
+  while(m=re.exec(f.s)){if(/enum\s*$/.test(f.s.slice(Math.max(0,m.index-8),m.index)))continue;
+   const o=m.index+m[0].length,e=close(f.s,o-1,'{','}');let top='',d=0;
+   for(let i=o;i<e;i++){const c=f.s[i];if(c=='{'){if(!d++)top+=';'}else if(c=='}')d--;else if(!d)top+=c}
+   const c={name:m[2],bases:(m[3]||'').split(',').map(x=>x.replace(/\b(public|private|protected|virtual)\b/g,'').trim().split(/\s+/).pop()).filter(Boolean),mem:[],met:[],f,s:m.index,e};
+   top.split(';').forEach(st=>{st=st.replace(/\s+/g,' ').replace(/\b(public|private|protected)\s*:/g,'').trim();if(!st||/^(using|typedef|friend|enum|template)/.test(st))return;
+    const p=st.indexOf('(');
+    if(p>=0){const w=st.slice(0,p).trim().split(/\s+/).pop();if(w)c.met.push(w+'()')}
+    else{st=st.replace(/=.*$/,'').replace(/,.*$/,'').trim();const mm=st.match(/^(.*?)(\w+)\s*(?:\[[^\]]*\])?$/);if(mm&&mm[1].trim())c.mem.push({t:mm[1].trim(),n:mm[2]})}});
+   cls.push(c)}});
+ files.forEach(f=>{const re=/(?:^|[\s;}*&>])((?:\w+::)*~?\w+)\s*\(([^;{}]*)\)\s*(?:(?:const|noexcept|override|final)\s*)*(?::[^;{}]*)?\{/g;let m;
+  while(m=re.exec(f.s)){const nm=m[1],ps=nm.split('::'),name=ps.pop();if(KW.test(name))continue;
+   const o=m.index+m[0].length-1,e=close(f.s,o,'{','}');let cn=ps.pop();
+   if(!cn){const c=cls.filter(c=>c.f==f&&c.s<m.index&&m.index<c.e).pop();cn=c&&c.name}
+   fns.push({id:cn?cn+'::'+name:name,name,cls:cn,f,line:ln(f,m.index+m[0].indexOf(nm)),params:m[2],o,e,calls:[],loops:[]});re.lastIndex=e}});
+ fns.forEach(fn=>{const s=fn.f.s;let m,l;
+  const lr=/\b(while|for)\s*\(/g;lr.lastIndex=fn.o;
+  while((l=lr.exec(s))&&l.index<fn.e){const q=close(s,l.index+l[0].length-1,'(',')');let j=q+1;while(/\s/.test(s[j]))j++;fn.loops.push([l.index,s[j]=='{'?close(s,j,'{','}'):s.indexOf(';',j)])}
+  const re=/(\.|->|::)?\s*\b([A-Za-z_]\w*)\s*\(/g;re.lastIndex=fn.o;
+  while((m=re.exec(s))&&m.index<fn.e){if(KW.test(m[2]))continue;const p=m.index+m[0].length-1,q=close(s,p,'(',')');
+   fn.calls.push({name:m[2],args:fn.f.t.slice(p+1,q).replace(/\s+/g,' ').trim(),line:ln(fn.f,p),loop:fn.loops.some(r=>p>=r[0]&&p<=r[1])})}})}
+function resolve(c,from){const l=fns.filter(x=>x.name==c.name);return l.length?(l.find(x=>x.cls&&x.cls==from.cls)||l[0]):null}
+function build(entry){trace=[];const stack=[];
+ (function go(fn,d,lp){stack.push(fn.id);
+  fn.calls.forEach(c=>{const t=resolve(c,fn),l=lp||c.loop;
+   if(t){if(!stack.includes(t.id)&&d<8){const ps=split(t.params),as=split(c.args);
+     trace.push({k:'call',d,fn:t,from:fn,c,lp:l,st:[...stack,t.id],map:ps.map((p,i)=>(p.replace(/=.*$/,'').trim().split(/\s+/).pop().replace(/[*&]/g,''))+' ← '+(as[i]||'（既定値）')).filter(x=>!/^(void|\?)? ←/.test(x))});go(t,d+1,l)}}
+   else{const k=kind(c.name);if(k)trace.push({k,d,fn,c,lp:l,st:[...stack],desc:D[c.name]||''})}});
+  stack.pop()})(entry,0,false)}
+const row=(e,i)=>`<div class="ev ${e.k}${i==step&&tab=='s'?' act':''}" style="margin-left:${e.d*18}px" data-i="${i}">${e.k=='call'?`<b>${esc(e.fn.id)}</b>(${esc(e.map.join(', '))}) <span class="m">${esc(e.fn.f.name)}:${e.fn.line}</span>`:`<span class="bd">${e.k=='dx'?'DXライブラリ':'DX11'}</span> <b>${esc(e.c.name)}</b>(${esc(e.c.args.slice(0,60))}) ${e.desc?`<span class="m">— ${esc(e.desc)}</span>`:''}`}${e.lp?' 🔁':''}</div>`;
+function rClass(){
+ if(!cls.length)return '<p class="m">クラス／構造体が見つかりませんでした。</p>';
+ const W=210,cols=Math.min(4,Math.ceil(Math.sqrt(cls.length)));
+ cls.forEach(c=>{c.rows=[...c.mem.slice(0,8).map(m=>({t:m.t+' '+m.n,d:isD(m.t)})),...(c.mem.length>8?[{t:'…他'+(c.mem.length-8)+'個'}]:[]),{sep:1},...c.met.slice(0,8).map(t=>({t:'+ '+t})),...(c.met.length>8?[{t:'…'}]:[])];c.h=34+c.rows.length*16});
+ let cy=20;for(let r=0;r*cols<cls.length;r++){const g=cls.slice(r*cols,r*cols+cols);g.forEach((c,i)=>{c.x=20+i*(W+70);c.y=cy});cy+=Math.max(...g.map(c=>c.h))+50}
+ const ct=c=>[c.x+W/2,c.y+c.h/2],by=n=>cls.find(c=>c.name==n);
+ const clip=(c,p)=>{const[cx,cy]=ct(c),dx=p[0]-cx,dy=p[1]-cy,k=Math.min(dx?W/2/Math.abs(dx):1e9,dy?c.h/2/Math.abs(dy):1e9);return[cx+dx*k,cy+dy*k]};
+ const line=(a,b,cl,mk,lab)=>{const A=clip(a,ct(b)),B=clip(b,ct(a));return `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" class="ed ${cl}" marker-end="url(#${mk})"/>`+(lab?`<text x="${(A[0]+B[0])/2}" y="${(A[1]+B[1])/2-3}" class="lb">${esc(lab)}</text>`:'')};
+ let e='',b='';
+ cls.forEach(c=>{c.bases.forEach(n=>{const p=by(n);if(p&&p!=c)e+=line(c,p,'','tri')});
+  c.mem.forEach(m=>cls.forEach(o=>{if(o!=c&&new RegExp('\\b'+o.name+'\\b').test(m.t))e+=line(c,o,/[*&]/.test(m.t)?'dash':'','arr',m.n)}))});
+ cls.forEach(c=>{b+=`<rect x="${c.x}" y="${c.y}" width="${W}" height="${c.h}" rx="6" class="bx"/><text x="${c.x+W/2}" y="${c.y+19}" text-anchor="middle" class="cn">${esc(c.name)}</text><line x1="${c.x}" x2="${c.x+W}" y1="${c.y+28}" y2="${c.y+28}" class="ed"/>`;
+  c.rows.forEach((r,i)=>{const y=c.y+44+i*16;b+=r.sep?`<line x1="${c.x}" x2="${c.x+W}" y1="${y-11}" y2="${y-11}" class="ed"/>`:`<text x="${c.x+8}" y="${y}" class="rw ${r.d?'d11t':''}">${esc(r.t.length>30?r.t.slice(0,29)+'…':r.t)}</text>`})});
+ const mk=(id,d)=>`<marker id="${id}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="${d}" style="fill:${id=='tri'?'var(--bg)':'none'};stroke:var(--fg)"/></marker>`;
+ return `<div class="m">継承＝白三角 / 所有＝実線の矢印（値・スマートポインタ） / 参照のみ＝破線の矢印（ポインタ・参照） / <span style="color:var(--d11)">橙＝DirectX型</span></div><div class="sv"><svg width="${20+cols*(W+70)}" height="${cy}"><defs>${mk('tri','M0 0L10 5L0 10z')}${mk('arr','M0 1L10 5L0 9')}</defs>${e}${b}</svg></div>`}
+function rFlow(){
+ if(!trace.length)return '<p class="m">開始関数から呼び出される処理が見つかりませんでした。</p>';
+ const cnt={};trace.forEach(e=>{if(e.k!='call'){const k=e.k+e.c.name;(cnt[k]=cnt[k]||{k:e.k,n:e.c.name,c:0}).c++}});
+ return `<div class="m">使われているAPI（クリックで該当ステップへ移動は、下の各行から）</div><div>${Object.values(cnt).map(o=>`<span class="ev ${o.k} chip">${esc(o.n)} ×${o.c}</span>`).join('')||'<span class="m">なし</span>'}</div><div class="m" style="margin-top:8px">呼び出しの流れ（🔁＝ループ内で毎回実行。行をクリックでステップ実行へ）</div>${trace.map(row).join('')}`}
+function rStep(){
+ if(!trace.length)return '<p class="m">ステップがありません。</p>';
+ const e=trace[step],f=(e.from||e.fn).f,ls=f.t.split('\n'),a=Math.max(0,e.c.line-4);
+ const snip=ls.slice(a,e.c.line+3).map((t,i)=>`<span class="${a+i+1==e.c.line?'hl':''}">${String(a+i+1).padStart(3)}  ${esc(t)}</span>`).join('');
+ return `<div class="bar"><button id="pv">◀ 前へ</button><button id="nx">次へ ▶</button><button id="rs">最初から</button><span class="m">${step+1} / ${trace.length}</span></div>
+ <div class="card"><div class="m">呼び出しスタック</div><div>${e.st.map(esc).join(' → ')}</div>
+ <p>${e.k=='call'?`<b>${esc(e.fn.id)}</b> に処理が移ります。渡される値:<br>${e.map.length?e.map.map(esc).join('<br>'):'なし'}`:`<b>${esc(e.c.name)}</b>(${esc(e.c.args)}) を呼び出します${e.desc?'：'+esc(e.desc):''}`}${e.lp?'<br>🔁 ループ内なので毎回繰り返されます':''}</p><div class="m">${esc(f.name)}</div><pre>${snip}</pre></div>${trace.map(row).join('')}`}
+let tm=null,ny=[],zm=1;const RM=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const ic=e=>e.k=='call'?'🧩':/Present|Flip/.test(e.c.name)?'🖥️':/Draw/.test(e.c.name)?'🎨':/Clear/.test(e.c.name)?'🧹':/Load|Create/.test(e.c.name)?'📦':/Check|Get/.test(e.c.name)?'⌨️':/End|Delete|Unmap/.test(e.c.name)?'🏁':'⚙️';
+function stop(){clearInterval(tm);tm=null}
+function play(){if(tm)return;if(step>=trace.length-1)step=0;draw();tm=setInterval(()=>{if(step>=trace.length-1){stop();return}step++;draw()},900)}
+function rNode(){
+ if(!trace.length)return '<p class="m">開始関数から呼び出される処理が見つかりませんでした。</p>';
+ const W=220,ns=[{k:'start',x:16,t:'🏠 '+fns[$('en').value].id,l:[]}].concat(trace.map((e,i)=>({k:e.k,x:16+(e.d+1)*(W+70),t:ic(e)+' #'+(i+1)+' '+(e.k=='dx'?'DXLib  ':e.k=='d11'?'DX11  ':'')+(e.k=='call'?e.fn.id:e.c.name)+(e.lp?' 🔁':''),l:e.k=='call'?e.map:['('+e.c.args+')'].concat(e.desc?[e.desc]:[])})));
+ const kids=ns.map(()=>[]),last=[0];trace.forEach((e,i)=>{const p=e.d?last[e.d-1]:0;ns[i+1].p=p;kids[p].push(i+1);last[e.d]=i+1});
+ const colB={};let cur=14;
+ ns.forEach((n,j)=>{n.c=j?trace[j-1].d+1:0;n.h=28+Math.max(n.l.length,1)*15});
+ (function pl(j){const n=ns[j],b=colB[n.c]||14;
+  if(!kids[j].length)n.y=Math.max(cur,b);
+  else{kids[j].forEach(pl);const a=ns[kids[j][0]],z=ns[kids[j][kids[j].length-1]];n.y=Math.max((a.y+a.h/2+z.y+z.h/2)/2-n.h/2,b)}
+  colB[n.c]=n.y+n.h+20;cur=Math.max(cur,n.y+n.h+20)})(0);
+ const y=Math.max(...ns.map(n=>n.y+n.h))+20;ny=ns;
+ const act=step+1,mx=Math.max(...ns.map(n=>n.x))+W+20,e=trace[step];let w='',g='';
+ ns.forEach((n,j)=>{
+  if(j>0){const m=n,p=ns[n.p],x1=p.x+W,y1=p.y+12,x2=m.x,y2=m.y+12,dx=Math.max(50,Math.abs(x2-x1)/2);
+   w+=`<path class="wr${j==act?' on':j<act?' ps':''}" d="M${x1} ${y1}C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}" marker-end="url(#ah)"/>`;
+   if(j==act){const q=trace[j-1],lb=((q.k=='call'?(q.map[0]||'').split(' ← ')[1]:q.c.args)||'▶').slice(0,18),d=`M${x1} ${y1}C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}`;
+    w+=`<g${RM?` transform="translate(${x2-14} ${y2})"`:''}>${RM?'':`<animateMotion dur=".9s" fill="freeze" path="${d}"/>`}<circle r="7" style="fill:var(--ac)"/><text x="-11" y="4" class="pk">${esc(lb)}</text></g>`}}
+  g+=`<g class="nd${j<act?' p':''}${j==act?' a':''}" data-n="${j}"><rect class="nb" x="${n.x}" y="${n.y}" width="${W}" height="${n.h}" rx="6"/><path class="h-${n.k}" d="M${n.x} ${n.y+24}V${n.y+6}Q${n.x} ${n.y} ${n.x+6} ${n.y}H${n.x+W-6}Q${n.x+W} ${n.y} ${n.x+W} ${n.y+6}V${n.y+24}z"/><text class="nt" x="${n.x+10}" y="${n.y+16}">${esc(n.t.length>30?n.t.slice(0,29)+'…':n.t)}</text><circle class="h-${n.k}" cx="${n.x}" cy="${n.y+12}" r="5"/><circle class="h-${n.k}" cx="${n.x+W}" cy="${n.y+12}" r="5"/>`
+   +n.l.map((t,i)=>`<circle class="h-${n.k}" cx="${n.x}" cy="${n.y+36+i*15}" r="3"/><text class="rw" x="${n.x+10}" y="${n.y+40+i*15}">${esc(t.length>36?t.slice(0,35)+'…':t)}</text>`).join('')+'</g>'});
+ return `<div class="bar"><button id="pl">▶ 実行</button><button id="ps">■ 停止</button><button id="pv">◀ 前へ</button><button id="nx">次へ ▶</button><button id="rs">最初から</button><span class="m">${step+1} / ${trace.length}</span></div>
+ <div class="card"><div class="m">呼び出しスタック</div>${e.st.map(esc).join(' → ')}<br>${e.k=='call'?'渡される値：'+(e.map.length?e.map.map(esc).join(' / '):'なし'):esc(e.c.name)+'('+esc(e.c.args)+')'+(e.desc?'：'+esc(e.desc):'')}</div>
+ <div class="bar m">拡大 <input type="range" id="zm" min="60" max="150" value="${Math.round(zm*100)}"> 🧩自作関数 🎨描画 📦生成・読込 ⌨️入力 🧹消去 🖥️画面反映 ⚙️設定 🏁終了 ／ 青＝DXライブラリ 橙＝DX11 緑＝自作</div>
+ <div class="gv"><svg width="${mx*zm}" height="${(y+22)*zm}" viewBox="0 0 ${mx} ${y+22}"><defs><marker id="ah" viewBox="0 0 10 10" refX="16" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--mut)"/></marker></defs>${[...new Set(ns.map(n=>n.c))].map(c=>`<rect x="${6+c*(W+70)}" y="0" width="${W+20}" height="${y+22}" rx="10" style="fill:var(--card);opacity:.5"/><text x="${16+c*(W+70)}" y="16" class="lb" style="text-anchor:start">${c?c+'段目の呼び出し':'スタート'}</text>`).join('')}<g transform="translate(0 22)">${w}${g}</g></svg></div><div class="m">左から右へ呼び出しが深くなります。#番号＝実行順、線＝呼び出し元から呼び出し先へ。ノードをクリックでそこへ移動。🔁＝ループ内</div>`}
+function draw(){
+ document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t==tab));
+ $('out').innerHTML=files.length?{n:rNode,c:rClass,f:rFlow,s:rStep}[tab]():E;
+ if(tab=='n'){const v=document.querySelector('.gv'),n=ny[step+1];if(v&&n){v.scrollTop=(n.y+22+n.h/2)*zm-v.clientHeight/2;v.scrollLeft=(n.x+110)*zm-v.clientWidth/2}}
+ const a=document.querySelector('.act');if(a&&tab=='s')a.scrollIntoView({block:'nearest'})}
+function run(){stop();analyze();const sel=$('en');sel.innerHTML=fns.map((f,i)=>`<option value="${i}">${esc(f.id)}</option>`).join('');
+ sel.value=Math.max(0,fns.findIndex(f=>/^(wmain|main|WinMain|wWinMain)$/.test(f.name)));
+ trace=[];step=0;if(fns.length)build(fns[sel.value]);$('fl').textContent=files.map(f=>f.name).join(', ');draw()}
+async function load(list){for(const f of list){const b=await f.arrayBuffer();let t;try{t=new TextDecoder('utf-8',{fatal:true}).decode(b)}catch(_){t=new TextDecoder('shift_jis').decode(b)}files=files.filter(x=>x.name!=f.name);files.push({name:f.name,t})}run()}
+const dz=$('drop');dz.ondragover=e=>{e.preventDefault();dz.classList.add('on')};dz.ondragleave=()=>dz.classList.remove('on');
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove('on');load([...e.dataTransfer.files])};
+$('f').onchange=e=>load([...e.target.files]);
+$('go').onclick=()=>{files=[{name:'貼り付け.cpp',t:$('t').value}];run()};
+$('sm').onclick=()=>{files=[{name:'sample.cpp',t:SAMPLE}];run()};
+$('cl').onclick=()=>{files=[];run()};
+$('en').onchange=()=>{step=0;build(fns[$('en').value]);draw()};
+$('tabs').onclick=e=>{if(e.target.dataset.t){stop();tab=e.target.dataset.t;draw()}};
+$('out').onclick=e=>{const nd=e.target.closest('[data-n]');if(nd){stop();step=Math.max(0,+nd.dataset.n-1);draw();return}const r=e.target.closest('.ev[data-i]');if(r){step=+r.dataset.i;tab='s';draw();return}
+ const id=e.target.id;if(id=='nx')step=Math.min(trace.length-1,step+1);else if(id=='pv')step=Math.max(0,step-1);else if(id=='rs')step=0;else if(id=='pl'){play();return}else if(id=='ps'){stop();return}else return;draw()};
+$('out').onchange=e=>{if(e.target.id=='zm'){zm=e.target.value/100;draw()}};
+files=[{name:'sample.cpp',t:SAMPLE}];run();
+</script></body></html>
